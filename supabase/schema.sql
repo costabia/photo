@@ -1,0 +1,12 @@
+create extension if not exists pgcrypto;
+create table if not exists public.events (id uuid primary key default gen_random_uuid(), name text not null, slug text unique not null, event_date date, created_at timestamptz not null default now());
+create table if not exists public.photos (id uuid primary key default gen_random_uuid(), event_id uuid not null references public.events(id) on delete cascade, storage_path text not null, guest_session_id uuid not null, created_at timestamptz not null default now());
+alter table public.events enable row level security; alter table public.photos enable row level security;
+create policy "public can read event by slug" on public.events for select using (true);
+create policy "public can create photo records" on public.photos for insert with check (true);
+create policy "admins can read photos" on public.photos for select to authenticated using (true);
+create policy "admins can delete photos" on public.photos for delete to authenticated using (true);
+insert into storage.buckets (id, name, public) values ('wedding-photos','wedding-photos',false) on conflict (id) do nothing;
+create policy "anyone can upload wedding photos" on storage.objects for insert to anon, authenticated with check (bucket_id = 'wedding-photos');
+create policy "admins can read wedding photos" on storage.objects for select to authenticated using (bucket_id = 'wedding-photos');
+create policy "admins can delete wedding photos" on storage.objects for delete to authenticated using (bucket_id = 'wedding-photos');

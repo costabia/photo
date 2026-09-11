@@ -1,0 +1,25 @@
+'use client';
+import { useEffect, useRef, useState } from 'react';
+import { createClient } from '@/lib/supabase-browser';
+type State='idle'|'camera'|'preview'|'sending'|'sent';
+function makeId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16); crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  return 'guest-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+}
+export default function GuestCamera({eventId}:{eventId:string}) { const [state,setState]=useState<State>('idle'); const [file,setFile]=useState<File|null>(null); const [preview,setPreview]=useState(''); const [error,setError]=useState(''); const inputRef=useRef<HTMLInputElement>(null); const videoRef=useRef<HTMLVideoElement>(null); const streamRef=useRef<MediaStream|null>(null);
+ useEffect(()=>{ let id=localStorage.getItem('guest_session_id'); if(!id){id=makeId();localStorage.setItem('guest_session_id',id)} return ()=>streamRef.current?.getTracks().forEach(t=>t.stop())},[]);
+ const choose=(f:File|null)=>{if(!f)return; setError(''); if(!['image/jpeg','image/png','image/webp','image/heic','image/heif'].includes(f.type)||f.size>10*1024*1024){setError('Escolha uma imagem válida de até 10 MB.');return} setFile(f);setPreview(URL.createObjectURL(f));setState('preview')};
+ const open=async()=>{setError(''); try { if(!navigator.mediaDevices?.getUserMedia) throw Error(); const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}); streamRef.current=s; setState('camera'); setTimeout(()=>{if(videoRef.current)videoRef.current.srcObject=s},0)} catch { inputRef.current?.click(); setError('Não conseguimos acessar sua câmera. Você também pode escolher uma foto da sua galeria.') } };
+ const snap=()=>{const v=videoRef.current;if(!v)return;const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d')!.drawImage(v,0,0);c.toBlob(b=>b&&choose(new File([b],'photo.jpg',{type:'image/jpeg'})),'image/jpeg',.92);streamRef.current?.getTracks().forEach(t=>t.stop())};
+ const upload=async()=>{if(!file)return;setState('sending');setError('');const supabase=createClient();const id=makeId();const path=`${eventId}/${id}.${file.type==='image/png'?'png':'jpg'}`;const {error:e}=await supabase.storage.from('wedding-photos').upload(path,file,{contentType:file.type==='image/heic'?'image/jpeg':file.type,upsert:false});if(!e){const {error:db}=await supabase.from('photos').insert({event_id:eventId,storage_path:path,guest_session_id:localStorage.getItem('guest_session_id')});if(!db){setState('sent');return}}setState('preview');setError('Não conseguimos enviar sua foto. Tente novamente.');};
+ if(state==='camera')return <div style={{width:'100%'}}><video ref={videoRef} autoPlay playsInline muted style={{width:'100%',borderRadius:16,background:'#222',aspectRatio:'3/4',objectFit:'cover'}}/><div style={{display:'flex',gap:10,justifyContent:'center',marginTop:18}}><button className="btn btn-primary" onClick={snap}>Capturar foto</button><button className="btn btn-ghost" onClick={()=>{streamRef.current?.getTracks().forEach(t=>t.stop());setState('idle')}}>Cancelar</button></div></div>;
+ if(state==='preview'||state==='sending')return <div style={{width:'100%',textAlign:'center'}}><img src={preview} alt="Pré-visualização" style={{width:'100%',maxHeight:'60vh',objectFit:'contain',borderRadius:16}}/><div style={{display:'flex',gap:10,justifyContent:'center',marginTop:18}}><button className="btn btn-ghost" disabled={state==='sending'} onClick={()=>{setFile(null);setPreview('');setState('idle')}}>Tirar outra</button><button className="btn btn-primary" disabled={state==='sending'} onClick={upload}>{state==='sending'?'Enviando sua foto…':'Enviar foto'}</button></div></div>;
+ if(state==='sent')return <div style={{textAlign:'center'}}><div style={{fontSize:45,color:'var(--rose)'}}>♡</div><h2 style={{fontSize:32,margin:'10px 0'}}>Foto enviada ♡</h2><p style={{color:'var(--muted)',marginBottom:28}}>Obrigada por registrar esse momento com a gente.</p><button className="btn btn-primary" onClick={()=>setState('idle')}>Tirar outra foto</button></div>;
+ return <div style={{width:'100%',textAlign:'center'}}><button className="btn btn-primary" style={{fontSize:17,padding:'18px 34px'}} onClick={open}>Tirar uma foto <span>→</span></button><input ref={inputRef} type="file" accept="image/*" capture="environment" hidden onChange={e=>choose(e.target.files?.[0]||null)}/>{error&&<p style={{color:'#a84b4b',fontSize:13,marginTop:18}}>{error}</p>}</div>;
+}
