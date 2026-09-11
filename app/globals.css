@@ -11,3 +11,7 @@ button { font:inherit; cursor:pointer; } .serif { font-family:'Poppins',sans-ser
 .eyebrow { text-transform:uppercase; letter-spacing:.16em; font-size:11px; color:var(--rose); font-weight:600; }
 .input { width:100%; background:white; border:1px solid var(--line); border-radius:10px; padding:13px 14px; outline:none; } .input:focus { border-color:var(--rose); }
 .card { background:white; border:1px solid var(--line); border-radius:16px; }
+.loader { width:16px; height:16px; border:2px solid rgba(255,255,255,.35); border-top-color:currentColor; border-radius:50%; display:inline-block; animation:spin .7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+button.card, .card button { color:var(--ink); }
+@media (max-width:600px) { .admin-title { font-size:22px !important; } .admin-event-title { font-size:13px !important; } }
